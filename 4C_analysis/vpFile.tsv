@@ -1,0 +1,7 @@
+expname	primer	firstenzyme	secondenzyme	genome	vpchr	vppos	analysis	fastq
+7_ScrmblD_Rep1	TCCCAAATTCGCTCCATCAGT	DpnII	NlaIII	hg38	2	172096280	cis	cleaned_filtered_7_ScrmblD_Rep1_S7_R1_001.fastq.gz
+8_DLX1_Rep1	TCCCAAATTCGCTCCATCAGT	DpnII	NlaIII	hg38	2	172096280	cis	cleaned_filtered_8_DLX1_Rep1_S8_R1_001.fastq.gz
+9_ScrmblD_Rep2	TCCCAAATTCGCTCCATCAGT	DpnII	NlaIII	hg38	2	172096280	cis 	cleaned_filtered_9_ScrmblD_Rep2_S9_R1_001.fastq.gz
+10_DLX1_Rep2	TCCCAAATTCGCTCCATCAGT	DpnII	NlaIII	hg38	2	172096280	cis	cleaned_filtered_10_DLX1_Rep2_S10_R1_001.fastq.gz
+11_ScrmblD_Rep3	TCCCAAATTCGCTCCATCAGT	DpnII	NlaIII	hg38	2	172096280	cis	cleaned_filtered_11_ScrmblD_Rep3_S11_R1_001.fastq.gz
+12_DLX1_Rep3	TCCCAAATTCGCTCCATCAGT	DpnII	NlaIII	hg38	2	172096280	cis 	cleaned_filtered_12_DLX1_Rep3_S12_R1_001.fastq.gz
