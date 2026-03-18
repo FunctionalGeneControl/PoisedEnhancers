@@ -1,0 +1,13 @@
+Day5_PRC2_DMSO_total_pooled	~/analysis/Mikhail/PECHiC/Chicago_step2/Day5_PRC2_DMSO_2023_2024_total_pooled/data/Day5_PRC2_DMSO_2023_2024_total_pooled.Rds
+Day5_PRC2_PROTAC_total_pooled	~/analysis/Mikhail/PECHiC/Chicago_step2/Day5_PRC2_PROTAC_2023_2024_total_pooled/data/Day5_PRC2_PROTAC_2023_2024_total_pooled.Rds
+Day5_PRC2_UNC1999_total_pooled	~/analysis/Mikhail/PECHiC/Chicago_step2/Day5_PRC2_UNC1999_2023_2024_total_pooled/data/Day5_PRC2_UNC1999_2023_2024_total_pooled.Rds
+naive   ~/analysis/PECHiC/Rds/naive_comb_noDown.Rds
+day1    ~/analysis/PECHiC/Rds/day1_comb_noDown.Rds
+day3    ~/analysis/PECHiC/Rds/day3_comb_noDown.Rds
+day5    ~/analysis/PECHiC/Rds/day5_comb_noDown.Rds
+day7    ~/analysis/PECHiC/Rds/day7_comb_noDown.Rds
+day10   ~/analysis/PECHiC/Rds/day10_comb_noDown.Rds
+day14   ~/analysis/PECHiC/Rds/day14_comb_noDown.Rds
+primed  ~/analysis/PECHiC/Rds/primed_comb_noDown.Rds
+NE	~/analysis/PECHiC/Rds/NE_comb_noDown.Rds
+DE	~/analysis/PECHiC/Rds/DE_comb_noDown.Rds
