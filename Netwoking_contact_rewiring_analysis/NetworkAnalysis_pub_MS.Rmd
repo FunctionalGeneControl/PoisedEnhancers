@@ -1,0 +1,205 @@
+---
+title: "Network analysis of PE contact rewiring upon naive-to-primed transition"
+author: "Dr. Monica Della Rosa and Dr. Mikhail Spivakov"
+date: "13/07/2025"
+output: html_document
+---
+
+```{r Initializing session}
+library(data.table)
+library(tidyverse)
+library(GenomicRanges)
+library(dplyr)
+library(stringr)
+library(plyranges)
+library(igraph)
+library(ggraph)
+library(ggplot2)
+
+```
+
+``` {r Files upload}
+working_dir <- "~/Documents/Bioinformatics/Network_plot"
+
+# Filtered peakmatrix for at least one time point of the transition, primed, NE and DE with a score higher than 5.
+peakMatrix <- fread("~/Documents/Bioinformatics/PECHiC_PRC2_DPPA/peakMatrix/PerChicagoScores/Peakmatrix_chicago_score_naive-to-primed_transition_differentiation_allSamples.txt")
+
+# Temporal clustering
+IntClOG <- fread("~/Documents/Bioinformatics/Final_scripts_paper/pepm_transition_dtw_final_02-02-2026.txt")
+
+# Baitmap
+baitmap <- fread(file.path(working_dir, "2019.11.15_hg38_PE.baitmap"))
+baitmap2 <- fread(file.path(working_dir, "Human_PEcHiC_hg38_DpnII_bin5K_sol_baits.baitmap_4col.txt"))
+baitmap.compl <- as.data.table(baitmap[,1:4] %>% inner_join(baitmap2, by = c("V1", "V2", "V3")))
+setnames(baitmap.compl, c("V4.x", "V4.y"), c("ogID", "5KbID"))
+
+rmap <- fread(file.path(working_dir, "Human_PEcHiC_hg38_DpnII_bin5K_sol_baits.rmap"))
+
+# TSS
+TSS <- fread(file.path(working_dir, "2021.09_hg38_TSSmain.tsv")) 
+TSSv1 <- fread(file.path(working_dir, "2021.09_TSS_1toY_bedFormat.tsv")) #this is needed, as the above files has the whole gene coord, rather that the TSS±500bp
+
+```
+
+``` {r Making GRanges from TSS positions and rmap}
+
+table(IntClOG$merged_dtw_trans_cl6_2with6)
+IntClOG[, intBaitClust:=paste(unique(sort(merged_dtw_trans_cl6_2with6[merged_dtw_trans_cl6_2with6!=""])), collapse="+"), by="baitID"]
+table(IntClOG$intBaitClust)
+
+IntFilt <- as.data.table(IntClOG %>% filter(merged_dtw_trans_cl6_2with6 != ""))
+
+TSS$gene_id <- str_remove_all(TSS$gene_id, pattern="\\..*") 
+TSS1toY <- as.data.table(TSS %>% filter(V1 == 1 | V1 == 2 | V1 == 3 | V1 == 4 |V1 == 5 |V1 == 6 |V1 == 7|V1 == 8|V1 == 9|V1 == 10|V1 == 11|V1 == 12|V1 == 13|V1 == 14|V1 == 15|V1 == 16|V1 == 17|V1 == 18|V1 == 19|V1 == 20|V1 == 21|V1 == 22|V1 == "X"|V1 == "Y"))
+TSScompl <- as.data.table(bind_cols(TSSv1, TSS1toY) %>% dplyr::select(1,2,3,8,9,10))
+setnames(TSScompl, c("V1...1", "V7"), c("TSSchr","strand"))
+
+(rmap.gr <- rmap %>% dplyr::rename(start = V2) %>% dplyr::rename(end = V3) %>% dplyr::rename(seqnames = V1) %>%
+  transform(seqnames = rmap$V1) %>%
+  as_granges()
+)
+
+(TSS.gr <- TSScompl %>% dplyr::rename(start = V2) %>% dplyr::rename(end = V3) %>% dplyr::rename(seqnames = TSSchr) %>%
+  transform(seqnames = TSScompl$TSSchr) %>%
+  as_granges()
+)    
+```
+
+``` {r OE interacting genes}
+OETss <- findOverlaps(TSS.gr, rmap.gr, minoverlap = 10, select = "all")
+rfIDtss <- bind_cols(TSScompl[OETss@from,], rmap[OETss@to, ])
+
+OE.TSS <- as.data.table(IntFilt %>% left_join(rfIDtss, by = c("oeID" = "V4"), relationship = "many-to-many")  )
+length(which(is.na(OE.TSS$gene_name) == TRUE)) # 1521
+
+```
+
+``` {r Network visualization with igraph}
+DtoU0 <- as.data.table(OE.TSS)[grep("Gained (early|late).*Lost", intBaitClust)] # 1743
+
+DtoU = DtoU0
+
+edges <- DtoU[, c("baitID", "oeID", "merged_dtw_trans_cl6_2with6", "gene_name")] #w/o GOterms
+
+g <- graph_from_data_frame(d = edges, vertices = unique(c(edges$baitID, edges$oeID)), directed = F)
+E(g)$colors <-  ifelse(E(g)$merged_dtw_trans_cl6_2with6 == "Lost", "#0072B2",
+                       ifelse(E(g)$merged_dtw_trans_cl6_2with6 == "Gained early", "darkred",
+                              ifelse(E(g)$merged_dtw_trans_cl6_2with6 == "Gained late", "darkorange", 
+                                     ifelse(E(g)$merged_dtw_trans_cl6_2with6 == "Transient", "purple", 
+                                             "darkgreen"))))
+V(g)$bait <- ifelse(vertex.attributes(g)$name %in% baitmap.compl$`5KbID` == TRUE, "B", "OE")
+ 
+# Create a named vector: names are oeID, values are gene names
+gene_map <- setNames(edges$gene_name, edges$oeID)
+
+# Assign gene_name attribute to matching vertices
+V(g)$gene_name <- gene_map[V(g)$name]
+
+
+V(g)$colors <- ifelse(V(g)$bait=="B", "darkblue", "darkorange")
+
+```
+
+```{r}
+
+#pdf("full_network_hairball.pdf")
+plot(g, vertex.size= 0.5, edge.width = 0.5, vertex.label = NA, vertex.shape = V(g)$shape, edge.color = E(g)$colors, vertex.color = V(g)$colors,
+     layout=layout_with_kk(g))
+#dev.off()
+
+```
+
+Get a random subgraph of 50 components
+
+```{r}
+
+set.seed(124)
+comps <- components(g)
+
+# Sample k disjointed components at random
+k <- 50  # number of components you want
+comp_ids <- sample(unique(comps$membership), k)
+
+# Get vertex indices for the selected components
+selected_vertices <- which(comps$membership %in% comp_ids)
+
+# Induce a subgraph by including all edges of the vertices forming part of the randomly selected communities 
+g_sub <- induced_subgraph(g, vids = selected_vertices)
+#plot(g_sub, vertex.size= 1.5, edge.width = 1, vertex.label = NA, vertex.shape = V(g_sub)$shape, edge.color = E(g_sub)$colors, vertex.color = V(g_sub)$colors)
+
+g_simple <- simplify(g_sub, remove.multiple = TRUE, remove.loops = FALSE,edge.attr.comb = "first")
+
+#plot(g_simple, vertex.size= 1.5, edge.width = 1, vertex.label = NA, vertex.shape = V(g_simple)$shape, edge.color = E(g_simple)$colors, vertex.color = V(g_simple)$colors)
+
+
+```
+
+```{r}
+#pdf("new_down_up_network_random50_seed124.pdf", height=20, width=20)
+plot(g_simple, vertex.size= 2.5, edge.width = 3, vertex.label = NA, edge.color = E(g_simple)$colors, vertex.color = V(g_simple)$colors)
+#dev.off()
+```
+
+
+Add our HOX subnetwork to it, avoiding duplication
+
+```{r}
+
+# Find which components contain at least one "HOX"
+hox_components <- unique(comps$membership[grepl("HOX", V(g)$gene_name)])
+
+# Extract the vertex indices of those components
+selected_vertices <- which(comps$membership %in% hox_components)
+
+# Create a subgraph consisting of just those components
+g_hox <- induced_subgraph(g, vids = selected_vertices)
+g_hox_simple <- simplify(g_hox, remove.multiple = TRUE, remove.loops = FALSE,edge.attr.comb = "first")
+
+hox_vertex_labels <- ifelse(is.na(V(g_hox_simple)$gene_name), "", V(g_hox_simple)$gene_name)
+
+plot(g_hox_simple, vertex.size= 2.5, edge.width = 3, 
+     edge.color = E(g_hox_simple)$colors, vertex.color = V(g_hox_simple)$colors,
+     vertex.label = hox_vertex_labels)
+
+```
+
+```{r}
+
+# Extract the vertex indices of those components
+selected_vertices <- which(comps$membership %in% c(hox_components,comp_ids))
+
+# Create a subgraph consisting of just those components
+g_combined <- induced_subgraph(g, vids = selected_vertices)
+g_combined_simple <- simplify(g_combined, remove.multiple = TRUE, remove.loops = FALSE,edge.attr.comb = "first")
+
+combined_vertex_labels <- ifelse(is.na(V(g_combined_simple)$gene_name), "", V(g_combined_simple)$gene_name)
+
+plot(g_combined_simple, vertex.size= 2.5, edge.width = 3, 
+     edge.color = E(g_combined_simple)$colors, vertex.color = V(g_combined_simple)$colors, vertex.label = NA)
+
+```
+
+
+
+```{r}
+E(g_combined_simple)$density <- ifelse(grepl(c("HOX"), E(g_combined_simple)$gene_name) == TRUE, "yellow", "Gray")
+
+```
+
+```{r}
+#pdf("new_network_with_density_with_text_seed124_v2.pdf")
+set.seed(123)
+( DtoU_network <-  ggraph::ggraph(g_combined_simple, layout = "fr") +
+  ggraph::geom_edge_link(aes(color = E(g_combined_simple)$colors, width = 0.8)) +
+  ggraph::geom_edge_density(aes(fill = E(g_combined_simple)$density)) +
+  scale_fill_manual(values = c("yellow", "grey")) +
+  ggraph::geom_node_point(color = V(g_combined_simple)$colors, size=2) +
+  #ggraph::geom_node_label(aes(label = V(g)$label), label.size = 0.03) +
+  scale_color_manual(values = c("#006633", "#C0C0C0")) +
+  ggraph::geom_node_text(
+    aes(label = ifelse(is.na(V(g_combined_simple)$gene_name), "", V(g_combined_simple)$gene_name)), size=2.5)+
+  theme_void()
+)
+#dev.off()
+
+```
