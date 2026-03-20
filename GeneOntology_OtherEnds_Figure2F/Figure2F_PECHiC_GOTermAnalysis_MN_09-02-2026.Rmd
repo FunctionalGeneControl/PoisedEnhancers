@@ -1,0 +1,215 @@
+---
+title: "Gene Ontology enrichment analysis of genes contacted by PEs across different contact dynamics during the transition"
+author: "Dr. Monica Della Rosa and Dr. Marina Nocente"
+date: "09/02/2026"
+output: html_document
+---
+
+# Libraries
+``` {r}
+library(data.table)  
+library(dplyr)
+library(GenomicRanges)  
+library(org.Hs.eg.db)  
+library(clusterProfiler)  
+library(RColorBrewer)  
+library(ggplot2)  
+library(GOSemSim)
+library(ggtext)
+
+```
+
+# File paths
+``` {r}
+working_dir <- "~/Documents/Bioinformatics/GO_OtherEnds"
+
+dtwClnew_file <- file.path("/Users/mnocente/Documents/Bioinformatics/Final_scripts_paper/PoisedEnhancers/Temporal_clustering_PEs_contacts/pepm_transition_dtw_final_02-02-2026.txt")
+restriction_fragm_coor_file <- file.path(working_dir, "Human_PEcHiC_hg38_DpnII_bin5K_sol_baits.rmap")
+TSS_file <- file.path(working_dir, "2021.09_hg38_TSSmain.tsv")
+TSS_adjusted_coor_file <- file.path(working_dir, "./2021.09_TSS_1toY_bedFormat.tsv")
+
+```
+
+
+# Mapping other-end restriction fragments to transcription start sites (TSS)
+``` {r}
+### Getting TSS rfIDs, then overlapping with oeIDs from the clusters' table
+# Load restriction fragment (rmap) coordinates
+rmap <- fread(restriction_fragm_coor_file)
+
+# Rename columns
+colnames(rmap)[1:3] <- c("chr", "start", "end")
+
+# Convert to GRanges
+rmap.gr <- makeGRangesFromDataFrame(rmap, keep.extra.columns = TRUE)
+
+# Load Transcription Start Site (TSS) data
+TSS <- fread(TSS_file) ##using this format as I need the genes' IDs to then run GO analysis
+
+# Clean gene IDs by removing version numbers (everything after the dot)
+TSS$gene_id <- gsub("\\..*", "", TSS$gene_id)
+
+# Select TSSs only from chromosomes 1-22, X, and Y
+TSS1toY <- as.data.table(TSS[TSS$V1 %in% c(1:22, "X", "Y"), ])
+colnames(TSS1toY)[1:4] <- c("TSSchr", "TSSstart", "TSSend", "TSSstrand")
+
+# Load another version of TSS data with adjusted coordinates
+TSSv1 <- fread(TSS_adjusted_coor_file) #this is needed, as the above files has the whole gene coord, rather that the TSS±500bp
+colnames(TSSv1)[1:4] <- c("TSSchr", "TSSstart", "TSSend", "gene_name")
+
+# Combine TSS data sources and select relevant columns
+TSScompl <- as.data.table(cbind(TSSv1, TSS1toY)[, c(1, 2, 3, 8, 9, 10)])
+
+# Convert TSS data to GRanges format
+TSS.gr <- makeGRangesFromDataFrame(
+  TSScompl[, list(seqname = as.character(TSSchr), start = as.integer(TSSstart), 
+                  end = as.integer(TSSend), geneName = gene_name, geneID = gene_id)], 
+  keep.extra.columns = TRUE
+)
+
+# Find overlaps between TSS regions and restriction fragments
+OETss <- findOverlaps(TSS.gr, rmap.gr, minoverlap = 10, select = "all")
+
+# Extract overlapping entries and ensure uniqueness
+rfIDtss <- cbind(TSScompl[OETss@from,], rmap[OETss@to, ])
+rfIDtssUn <- unique(setDT(rfIDtss), by = c("TSSchr", "TSSstart", "TSSend")) #unique by tss coordinates
+any(duplicated(rfIDtssUn$V4)) # yes I have several times the same baitID (in V4 column)
+
+# Perform the inner join using merge() between clusters data and Tss-OtherEnd
+dtwClnew <- fread(dtwClnew_file)
+TssOEdwtNew <- merge(dtwClnew, rfIDtssUn, by.x = "oeID", by.y = "V4")
+
+write.table(TssOEdwtNew, file.path(working_dir, "OtherEnd_TSS_coordinates.txt"), sep = "\t", quote = FALSE, row.names = FALSE)
+
+```
+
+
+# Gene Ontology (GO) enrichment analysis by temporal contact clusters
+```{r}
+#retrieve gene IDs by cluster and run GOTerm ontology
+run_GO_analysis <- function(cluster_name, cluster_column, color_palette) {
+  # Filter unique genes for the specified cluster
+  TssOEdwt_cluster <- unique(TssOEdwtNew[get(cluster_column) == cluster_name], by = "gene_name")
+  
+  # Extract ENSEMBL IDs
+  ENSEMBL_ids <- TssOEdwt_cluster$gene_id
+  
+  # Convert ENSEMBL to ENTREZ and SYMBOL
+  genes_mapped <- bitr(ENSEMBL_ids, fromType = "ENSEMBL",
+                       toType = c("ENTREZID", "SYMBOL"),
+                       OrgDb = org.Hs.eg.db,
+                       drop = TRUE)
+  
+  # Run GO enrichment analysis
+  enrich_result <- enrichGO(gene = genes_mapped$ENSEMBL,
+                            OrgDb = org.Hs.eg.db,
+                            keyType = "ENSEMBL",
+                            ont = "BP",
+                            pAdjustMethod = "BH",
+                            pvalueCutoff = 0.05,
+                            qvalueCutoff = 0.05,
+                            readable = TRUE)
+  
+  # Extract and arrange results
+  enrich_dt <- enrich_result@result %>% arrange(pvalue)
+  
+  # Select color palette
+  fill_colors <- brewer.pal(9, color_palette)
+  
+  # Bar plot
+  p_bar <- ggplot(enrich_dt[1:30,], aes(x = reorder(Description, -Count), y = Count, fill = pvalue)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    scale_fill_gradientn(colors = rev(fill_colors[1:4])) +
+    theme_classic() +
+    labs(title = paste("GO Analysis -", cluster_name), x = "GO Term", y = "Gene Count")
+  
+  # Dot plot using clusterProfiler
+  p_dot <- dotplot(enrich_result, showCategory = 20, title = paste("Dotplot -", cluster_name)) +
+    theme_minimal()
+  
+  # Print plots
+  print(p_bar)
+  print(p_dot)
+  
+  return(enrich_result@result)
+}
+
+
+## Try to combine all the clusters on the same dot plot:
+# Run GO analysis for each condition and store results
+go_results_gained_early <- run_GO_analysis("Gained early", "merged_dtw_trans_cl6_2with6", "Reds") %>% mutate(Condition = "Gained early")
+go_results_gained_late <- run_GO_analysis("Gained late", "merged_dtw_trans_cl6_2with6", "Oranges") %>% mutate(Condition = "Gained late")
+go_results_transient <- run_GO_analysis("Transient", "merged_dtw_trans_cl6_2with6", "Purples") %>% mutate(Condition = "Transient")
+go_results_constant <- run_GO_analysis("Constant", "merged_dtw_trans_cl6_2with6", "Greens") %>% mutate(Condition = "Constant")
+go_results_lost <- run_GO_analysis("Lost", "merged_dtw_trans_cl6_2with6", "Blues") %>% mutate(Condition = "Lost")
+
+
+```
+
+
+# Semantic clustering and integrated visualization of enriched GO terms
+```{r}
+# Combine all results into one dataframe
+all_go_results <- bind_rows(go_results_gained_early, go_results_gained_late, 
+                            go_results_transient, go_results_constant, 
+                            go_results_lost)
+
+# Set the correct order for the 'Condition' factor
+all_go_results$Condition <- factor(all_go_results$Condition, 
+                                   levels = c("Gained early", "Gained late", "Constant", "Transient", "Lost"))
+
+## 1. Select Top 20 Terms Per Condition
+top_go_terms <- all_go_results %>%
+  group_by(Condition) %>%
+  top_n(-20, pvalue) %>%
+  ungroup()
+
+## 2. Compute Semantic Similarity Between GO Terms
+hsGO <- godata('org.Hs.eg.db', ont = "BP")
+
+go_ids <- unique(top_go_terms$ID)
+sim_matrix <- termSim(go_ids, go_ids, semData = hsGO, method = "Wang")
+dist_matrix <- as.dist(1 - sim_matrix)
+hc <- hclust(dist_matrix)
+
+## 3. Cluster GO Terms and Map Back
+k <- 4  # number of semantic clusters
+go_clusters <- cutree(hc, k = k)
+cluster_df <- data.frame(ID = names(go_clusters), Cluster = factor(go_clusters))
+
+top_go_terms <- left_join(top_go_terms, cluster_df, by = "ID")
+
+## 4. Order GO Terms by Cluster and p-value
+top_go_terms <- top_go_terms %>%
+  arrange(Cluster, pvalue) %>%
+  mutate(Description = factor(Description, levels = unique(Description)))  # keep duplicates OK
+
+## 5. Generate Colored Y-axis Labels by Cluster
+term_colors <- RColorBrewer::brewer.pal(k, "Dark2")
+names(term_colors) <- levels(cluster_df$Cluster)
+
+top_go_terms$Description_colored <- mapply(
+  function(label, cluster) {
+    color <- term_colors[as.character(cluster)]
+    sprintf("<span style='color:%s'>%s</span>", color, label)
+  },
+  label = top_go_terms$Description,
+  cluster = top_go_terms$Cluster
+)
+
+## 6. Plot
+ggplot(top_go_terms, aes(x = Condition, y = Description_colored, size = Count, color = pvalue)) +
+  geom_point() +
+  scale_color_gradient(low = "red", high = "blue") +
+  theme_minimal() +
+  labs(title = "GO Enrichment Across Conditions",
+       x = "Condition",
+       y = "GO Term",
+       size = "Gene Count",
+       color = "p-value") +
+  theme(axis.text.y = element_markdown(size = 10))  # needed for HTML-like labels
+
+```
+
+
