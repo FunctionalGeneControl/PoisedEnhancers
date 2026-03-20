@@ -1,0 +1,3 @@
+This directory contains the code required to reproduce the temporal clustering of PE contacts (see Methods of Nocente et al.) and Figures 2B and 2D.
+First, run the script "dtw_clust_Transition_Focused_finalRedo_Oct2025.R" using the file "Focused_peakmatrix_PE_TSS_interaction.tsv" (available on OSF) to generate the clustering of PE contacts ("pepm_transition_dtwCluster_Focused_Oct2025.txt").
+Then, run this script "Temporal_clustering_PEs_contacts.R" to produce the final clustering file (pepm_transition_dtw_final_02-02-2026.txt) and the plot of Figure 2B. Combinations of temporal classes of contact per PE were visualised using an UpSet plot (Figure 2D).
