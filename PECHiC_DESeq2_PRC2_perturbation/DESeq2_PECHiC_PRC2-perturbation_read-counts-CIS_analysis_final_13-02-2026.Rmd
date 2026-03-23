@@ -1,0 +1,137 @@
+---
+title: "DESeq2 on PECHi-C data (read-counts-CIS) after PRC2 perturbation"
+author: "Dr. Marina Nocente"
+date: "2024-12-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r}
+library(data.table)
+library(ggplot2)
+library(DESeq2)
+
+```
+
+# File paths
+```{r}
+base_dir <- "~/Documents/Bioinformatics/PECHiC_PRC2_DPPA/Exploration_per_BaitID_PRC2"
+working_dir <- "~/Documents/Project_writing/Paper_PEs/Data_release/PECHiC_PRC2"
+
+read_counts_cis_file <- file.path(base_dir,"Read_counts_PerBait_CIS_table_Chinput.txt")
+
+```
+
+# Upload and prepare the PECHi-C data
+```{r}
+read_counts_cis <- fread(read_counts_cis_file)
+
+read_counts_cis_df <- as.data.frame(read_counts_cis) # Convert to a data.frame
+head(read_counts_cis_df)
+
+## Replace all NA values in the data.frame with 0
+read_counts_cis_df[is.na(read_counts_cis_df)] <- 0
+sum(is.na(sum(is.na(read_counts_cis_df))))  # Should return 0
+# Note: no detection and 0 reads are different
+
+## Select the columns of interest (use merged files for PROTAC and UNC1999 to balance the sequencing depths across replicates)
+read_counts_cis_df <- read_counts_cis_df[, c("baitID", "DMSO_R3", "DMSO_R4", "DMSO_R5", "PROTAC_merged-R3_R5", "PROTAC_R4", "UNC1999_merged_R3_R4", "UNC1999_R5")]
+
+fwrite(read_counts_cis_df, file.path(working_dir, "Read_counts_per_PEbaits_chinput_.txt"), sep = "\t", quote=F, col.names=T)
+
+```
+
+
+# Create the DESeq2 dataset
+For DESeq2 to function, you need two main inputs:
+- A count matrix: This matrix should have rows as features (bait IDs) and columns as samples (DMSO, PROTAC, UNC1999, etc.).
+- A sample information table (metadata): This table contains information about the experimental conditions or the groups each sample belongs to.
+
+## The count Matrix:
+```{r}
+## Preparing the Count Matrix
+# Remove the baitID column (the first column)
+count_data <- read_counts_cis_df[, -1]  
+
+# Assign the baitID as row names
+rownames(count_data) <- read_counts_cis_df$baitID
+head(count_data)
+
+# Convert count_data into a matrix
+count_data_matrix <- as.matrix(count_data)
+
+```
+
+## The metadata:
+```{r}
+# Create sample metadata
+colData <- data.frame(
+  condition = factor(c("DMSO", "DMSO", "DMSO", "PROTAC", "PROTAC", "UNC1999", "UNC1999")),
+  row.names = colnames(count_data_matrix)  # Ensure the column names match the samples in the matrix
+)
+
+# Check the colData structure
+head(colData, n=8)
+
+```
+
+
+# Proceed to DESeq2 analysis
+```{r}
+## Create DESeq2 dataset
+dds <- DESeqDataSetFromMatrix(countData = count_data_matrix, 
+                              colData = colData, 
+                              design = ~ condition)
+
+## Run DESeq2
+dds <- DESeq(dds)
+summary(dds)
+
+```
+
+
+
+# Extract the results: PROTAC versus DMSO
+
+```{r}
+## Extract results for the comparison: PROTAC vs DMSO
+res_PROTAC_DMSO <- results(dds, contrast = c("condition", "PROTAC", "DMSO"))
+
+# View the results
+View(as.data.frame(res_PROTAC_DMSO))
+dim(res_PROTAC_DMSO) # 31754     6
+
+# Export the full "merged" results
+res_PROTAC_DMSO_dt <- as.data.table(res_PROTAC_DMSO, keep.rownames = "baitID") 
+
+fwrite(res_PROTAC_DMSO_dt, file.path(working_dir, "res_deseq2PECHiC_PROTAC_DMSO_merged_all.txt"),
+       sep = "\t", quote = FALSE)
+
+```
+
+
+# Extract the results: UNC1999 versus DMSO
+
+```{r}
+## Extract results for the comparison: UNC1999 vs DMSO
+res_UNC_DMSO <- results(dds, contrast = c("condition", "UNC1999", "DMSO"))
+
+# View the results
+View(as.data.frame(res_UNC_DMSO))
+dim(res_UNC_DMSO) # 31754     6
+
+# Export the full "merged" results
+res_UNC_DMSO_dt <- as.data.table(res_UNC_DMSO, keep.rownames = "baitID") 
+
+fwrite(res_UNC_DMSO_dt, file.path(working_dir, "res_deseq2PECHiC_UNC_DMSO_merged_all.txt"),
+       sep = "\t", quote = FALSE)
+
+```
+
+
+
+

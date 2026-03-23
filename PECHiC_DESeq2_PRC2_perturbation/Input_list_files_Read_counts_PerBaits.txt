@@ -1,0 +1,14 @@
+DMSO_total = /rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_DMSO_2023_2024_total_pooled/Day5_PRC2_DMSO_2023_2024_total_pooled.chinput
+DMSO_R3 = /rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_DMSO_R3_2023_2024_pooled/Day5_PRC2_DMSO_R3_2023_2024_pooled.chinput
+DMSO_R4 =/rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_DMSO_R4_2023_2024_pooled/Day5_PRC2_DMSO_R4_2023_2024_pooled.chinput
+DMSO_R5 =/rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_DMSO_R5_2023_2024_pooled/Day5_PRC2_DMSO_R5_2023_2024_pooled.chinput
+PROTAC_total =/rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_PROTAC_2023_2024_total_pooled/Day5_PRC2_PROTAC_2023_2024_total_pooled.chinput
+PROTAC_R3 = /rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_PROTAC_R3_2023_2024_pooled/Day5_PRC2_PROTAC_R3_2023_2024_pooled.chinput
+PROTAC_R4 = /rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_PROTAC_R4_2023_2024_pooled/Day5_PRC2_PROTAC_R4_2023_2024_pooled.chinput
+PROTAC_R5 = /rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_PROTAC_R5_2023_2024_pooled/Day5_PRC2_PROTAC_R5_2023_2024_pooled.chinput
+PROTAC_merged-R3_R5 = /rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/merged_chinput/PROTAC/merged_Day5_PRC2_PROTAC_R3_2023_2024_pooled_Day5_PRC2_PROTAC_R5_2023_2024_pooled.chinput
+UNC1999_total =/rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_UNC1999_2023_2024_total_pooled/Day5_PRC2_UNC1999_2023_2024_total_pooled.chinput
+UNC1999_R3 = /rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_UNC1999_R3_2023_2024_pooled/Day5_PRC2_UNC1999_R3_2023_2024_pooled.chinput
+UNC1999_R4 = /rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_UNC1999_R4_2023_2024_pooled/Day5_PRC2_UNC1999_R4_2023_2024_pooled.chinput
+UNC1999_R5 =/rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/Day5_PRC2_UNC1999_R5_2023_2024_pooled/Day5_PRC2_UNC1999_R5_2023_2024_pooled.chinput
+UNC1999_merged_R3_R4 =/rds/general/user/mnocente/home/analysis/Mikhail/PECHiC/Chicago_step1/merged_chinput/UNC1999/merged_Day5_PRC2_UNC1999_R3_2023_2024_pooled_Day5_PRC2_UNC1999_R4_2023_2024_pooled.chinput
