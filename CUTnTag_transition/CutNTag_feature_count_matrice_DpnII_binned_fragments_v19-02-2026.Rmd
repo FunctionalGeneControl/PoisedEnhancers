@@ -1,0 +1,222 @@
+---
+title: "CutNTag_feature_count_matrice_DpnII_binned_fragments"
+author: "Dr. Monica Della Rosa and Dr. Marina Nocente"
+date: "05/10/2021 - 24/04/2023"
+output: html_document
+---
+
+For integration with PECHi-C data, we generated feature count matrices for each CUT&Tag dataset on the bins of DpnII fragments used in PECHi-C analysis and cross-normalised them using size factors produced by DESeq2’s estimateSizeFactors.
+
+# Libraries
+```{r}
+library(data.table)
+library(DESeq2)
+library(dplyr)
+
+```
+
+# File path
+```{r}
+working_dir <- file.path("~/Documents/Bioinformatics/Bioinfo_REDO_figure_Monica_CnT")
+CnT_pileup_file <- file.path(working_dir, "./PileUpMatrix_HistoneMarks_5kb.txt")
+
+```
+
+
+# CUT&Tag: creation of a PileUp matrix
+Notes:
+- 273 for H3K27me3
+- 41 for H3K4me1
+- 43 for H3K4me3
+- 271 for H3K27ac
+
+``` {r CnT:PileUp matrix}
+## Upload CUT&Tag pileup
+CnT <- fread(CnT_pileup_file)
+dim(CnT) # 577983   157
+
+## Save in a object all columns which have "_273" in their name
+col273 <- grep("_273", colnames(CnT))
+## Creation of a dataframe with the CnT data but only with the columns 1:5 (chr, start, end, ID, FragLen) and "273" columns)
+PileUp_273 <- CnT[,c(1:5,col273), with=F] # there are 35 columns
+
+## Save in a object all columns which have "_41" in their name
+col41 <- grep("_41", colnames(CnT))
+## Creation of a dataframe with the CnT data but only with the columns 1:5 (chr, start, end, ID, FragLen) and "41" columns)
+PileUp_41 <- CnT[,c(1:5,col41), with=F] # there are 36 columns
+## Remove the column n°10 because there is a bad replicate
+PileUp_41 <- PileUp_41[,-10] # there are 35 columns (lane1_B3F_41_1_merged_L001_GRCh38_bowtie2)
+
+## Save in a object all columns which have "_271" in their name
+col271 <- grep("_271", colnames(CnT))
+## Creation of a dataframe with the CnT data but only with the columns 1:5 (chr, start, end, ID, FragLen) and "41" columns)
+PileUp_271 <- CnT[,c(1:5,col271), with=F] # there are 35 columns
+
+## Save in a object all columns which have "_43" in their name
+col43 <- grep("_43", colnames(CnT))
+## Creation of a dataframe with the CnT data but only with the columns 1:5 (chr, start, end, ID, FragLen) and "41" columns)
+PileUp_43 <- CnT[,c(1:5,col43), with=F] # there are 35 columns
+
+## Export files at this step
+fwrite(x = PileUp_273, file.path(working_dir, "PileUp_273.tsv"), sep="\t")
+fwrite(x = PileUp_41, file.path(working_dir, "PileUp_41.tsv"), sep="\t")
+fwrite(x = PileUp_271, file.path(working_dir, "PileUp_271.tsv"), sep="\t")
+fwrite(x = PileUp_43, file.path(working_dir, "PileUp_43.tsv"), sep="\t")
+
+
+## Rename the columns
+names(PileUp_273)<-gsub("lane1_(\\w+\\d+_\\d+)_\\d_merged_L001_GRCh38_bowtie2.fragments.pileup", "\\1", names(PileUp_273))
+names(PileUp_41)<-gsub("lane1_(\\w+\\d+_\\d+)_\\d_merged_L001_GRCh38_bowtie2.fragments.pileup", "\\1", names(PileUp_41))
+names(PileUp_271)<-gsub("lane1_(\\w+\\d+_\\d+)_\\d_merged_L001_GRCh38_bowtie2.fragments.pileup", "\\1", names(PileUp_271))
+names(PileUp_43)<-gsub("lane1_(\\w+\\d+_\\d+)_\\d_merged_L001_GRCh38_bowtie2.fragments.pileup", "\\1", names(PileUp_43))
+
+## Order the columns as we want (B, C, D, E are the replicates)
+# 1, 3, 5, 7, 10, 14, N refer to the time points of the transition (naive to day14 cells), P refers to primed cells, NE to NeuroEctoderm cells, and DE to Definitive Endoderm cells.
+setcolorder(PileUp_273, c(names(PileUp_273)[1:5], 
+                         paste0(c("B","C", "D") ,"1_273"),
+                         paste0(c("B","C", "D") ,"3_273"),
+                         paste0(c("B","C", "D") ,"5_273"),
+                         paste0(c("B","C", "D") ,"7_273"),
+                         paste0(c("E","C", "D") ,"10_273"),
+                         paste0(c("E","C", "D") ,"14_273"),
+                         paste0("DE", 1:3 ,"_273"),
+                         paste0("N", 2:4 ,"_273"),
+                         paste0("NE", 1:3 ,"_273"),
+                         paste0("P", 2:4 ,"_273")))
+fwrite(x = PileUp_273, file.path(working_dir, "PileUp_273_final.tsv"), sep="\t")
+
+setcolorder(PileUp_41, c(names(PileUp_41)[1:5], 
+                         paste0(c("B","C", "D") ,"1_41"),
+                         paste0(c("B","C", "D") ,"3_41"),
+                         paste0(c("B","C", "D") ,"5_41"),
+                         paste0(c("B","C", "D") ,"7_41"),
+                         paste0(c("B","C", "D") ,"10_41"),
+                         paste0(c("B","C", "D") ,"14_41"),
+                         paste0("DE", 1:3 ,"_41"),
+                         paste0("N", 2:4 ,"_41"),
+                         paste0("NE", 1:3 ,"_41"),
+                         paste0("P", 2:4 ,"_41")))
+
+fwrite(x = PileUp_41, file.path(working_dir, "PileUp_41_final.tsv"), sep="\t")
+
+setcolorder(PileUp_271, c(names(PileUp_271)[1:5], 
+                         paste0(c("B","C", "D") ,"1_271"),
+                         paste0(c("B","C", "D") ,"3_271"),
+                         paste0(c("B","C", "D") ,"5_271"),
+                         paste0(c("B","C", "D") ,"7_271"),
+                         paste0(c("B","C", "D") ,"10_271"),
+                         paste0(c("B","C", "D") ,"14_271"),
+                         paste0("DE", 1:3 ,"_271"),
+                         paste0("N", 2:4 ,"_271"),
+                         paste0("NE", 1:3 ,"_271"),
+                         paste0("P", 2:4 ,"_271")))
+
+fwrite(x = PileUp_271, file.path(working_dir, "PileUp_271_final.tsv"), sep="\t")
+
+setcolorder(PileUp_43, c(names(PileUp_43)[1:5], 
+                         paste0(c("B","C", "D") ,"1_43"),
+                         paste0(c("B","C", "D") ,"3_43"),
+                         paste0(c("B","C", "D") ,"5_43"),
+                         paste0(c("B","C", "D") ,"7_43"),
+                         paste0(c("B","C", "D") ,"10_43"),
+                         paste0(c("B","C", "D") ,"14_43"),
+                         paste0("DE", 1:3 ,"_43"),
+                         paste0("N", 2:4 ,"_43"),
+                         paste0("NE", 1:3 ,"_43"),
+                         paste0("P", 2:4 ,"_43")))
+
+fwrite(x = PileUp_43, file.path(working_dir, "PileUp_43_final.tsv"), sep="\t")
+
+```
+
+
+# Counts normalization with DESeq2
+
+``` {r DESeq2 normalization}
+
+#### 273 - H3K27me3
+head(PileUp_273)
+
+# Creation of a matrix with all the line and the columns 6 to 35
+counts273 <- as.matrix(PileUp_273[,6:ncol(PileUp_273)])
+write.csv(x = counts273, file.path(working_dir, "counts273_MN.csv"))
+
+# Create a data.frame
+coldata <- data.frame(condition = rep("H3K27me3", ncol(counts273)) , # Add a column "condition": H3K27me3 for the 30 lignes
+                      type = factor(rep(c("day1", "day3", "day5", "day7", "day10", "day14", "DE", "N", "NE", "P"), each = 3))) # Add a column "type": time course for the 30 lignes
+
+row.names(coldata) <- colnames(counts273) # Name the rows of coldata as the columns of counts273 matrix
+
+# DESeq2 normalization
+dds273 <- DESeqDataSetFromMatrix(countData = counts273,
+                              colData = coldata,
+                              design = ~ type)
+
+sf273 <- DESeq2::estimateSizeFactors(dds273)
+dsSF273 <- sf273@colData$sizeFactor
+dsSF273
+
+
+#### 41 - H3K4me1
+
+# Creation of a matrix with all the ligne and the columns 6 to 35
+counts41 <- as.matrix(PileUp_41[,6:ncol(PileUp_41)])
+
+# Create a data.frame
+coldata <- data.frame(condition = rep("H3K4me1", ncol(counts41)), 
+                      type = factor(rep(c("day1", "day3", "day5", "day7", "day10", "day14", "DE", "N", "NE", "P"), each = 3)))
+
+row.names(coldata) <- colnames(counts41) # Name the rows of coldata as the columns of counts41 matrix
+
+# DESeq2 normalization
+dds41 <- DESeqDataSetFromMatrix(countData = counts41,
+                              colData = coldata,
+                              design = ~ type)
+
+sf41 <- DESeq2::estimateSizeFactors(dds41)
+dsSF41 <- sf41@colData$sizeFactor
+dsSF41
+
+
+NormCounts273 <- as.data.frame(mapply('/', as.data.frame(counts273), dsSF273))
+NormCounts41 <- as.data.frame(mapply('/', as.data.frame(counts41), dsSF41))
+
+
+## Sum of normalized counts for each condition (sum of the triplicates)
+PileUpNorm273 <- NormCounts273 %>% mutate(
+  day1_273 = apply(NormCounts273[,1:3], 1, sum),
+  day3_273 = apply(NormCounts273[,4:6], 1, sum),
+  day5_273 = apply(NormCounts273[,7:9], 1, sum),
+  day7_273 = apply(NormCounts273[,10:12], 1, sum),
+  day10_273 = apply(NormCounts273[,13:15], 1, sum),
+  day14_273 = apply(NormCounts273[,16:18], 1, sum),
+  DE_273 = apply(NormCounts273[,19:21], 1, sum),
+  N_273 = apply(NormCounts273[,22:24], 1, sum),
+  NE_273 = apply(NormCounts273[,25:27], 1, sum),
+  P_273 = apply(NormCounts273[,28:30], 1, sum),  
+) %>% dplyr::select(day1_273,day3_273,day5_273,day7_273,day10_273,day14_273,N_273,P_273,NE_273,DE_273)
+
+PileUpNorm41 <- NormCounts41 %>% mutate(
+  day1_41 = apply(NormCounts41[,1:3], 1, sum),
+  day3_41 = apply(NormCounts41[,4:6], 1, sum),
+  day5_41 = apply(NormCounts41[,7:9], 1, sum),
+  day7_41 = apply(NormCounts41[,10:12], 1, sum),
+  day10_41 = apply(NormCounts41[,13:15], 1, sum),
+  day14_41 = apply(NormCounts41[,16:18], 1, sum),
+  DE_41 = apply(NormCounts41[,19:21], 1, sum),
+  N_41 = apply(NormCounts41[,22:24], 1, sum),
+  NE_41 = apply(NormCounts41[,25:27], 1, sum),
+  P_41 = apply(NormCounts41[,28:30], 1, sum),  
+) %>% dplyr::select(day1_41,day3_41,day5_41,day7_41,day10_41,day14_41,N_41,P_41,NE_41,DE_41)
+
+
+## Create an object containing the 5 first columns of CnT (coordinates, length...), normalized counts for H3K27me3 and H3K4me1 for the different conditions
+PileUp_norm_41_273 <- cbind(CnT[,1:5],PileUpNorm273, PileUpNorm41)
+
+# Keep integer numbers for the counts
+PileUp_norm_41_273[,6:ncol(PileUp_norm_41_273)] <- lapply(PileUp_norm_41_273[,6:ncol(PileUp_norm_41_273)], as.integer)
+
+fwrite(PileUp_norm_41_273, file.path(working_dir, "MN_CnT_273_41_PileUp_NormComb_5kbRmap_v2.txt"), sep="\t")
+
+
+```
