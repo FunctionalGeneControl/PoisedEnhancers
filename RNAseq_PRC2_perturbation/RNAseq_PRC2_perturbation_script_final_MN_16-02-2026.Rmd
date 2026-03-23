@@ -1,0 +1,413 @@
+---
+title: "RNAseq analysis after PRC2 perturbation (PROTAC and catalytic inhibitor)"
+author: "Dr. Marina Nocente"
+date: "2025-03-24"
+output: html_document
+---
+
+# Libraries and path
+```{r}
+#######################################
+## Libraries
+#######################################
+library(DESeq2)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(EnhancedVolcano)
+
+library(ggplot2)
+
+#######################################
+## File paths
+#######################################
+working_dir <- file.path("~/Documents/Bioinformatics/RNAseq_PRC2_perturbations/")
+
+featureCounts_file_dir <- file.path("~/Documents/Bioinformatics/RNAseq_PRC2_perturbations/featureCounts/")
+
+```
+
+
+# Upload the featureCounts data
+```{r Upload the featureCounts data}
+
+## Load data, skipping the first line (header info)
+counts_DMSO_R3 <- read.delim(file.path(featureCounts_file_dir, "lane8805_CTGATCGT_ATATGCGC_Library1_DMSO_Day5_Rep3_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+counts_DMSO_R4 <- read.delim(file.path(featureCounts_file_dir, "lane8805_GAGACGAT_TAACCGGT_Library4_DMSO_Day5_Rep4_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+counts_DMSO_R5 <- read.delim(file.path(featureCounts_file_dir, "lane8805_CGCATGAT_TCAGGCTT_Library7_DMSO_Day5_Rep5_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+counts_PROTAC_R3 <- read.delim(file.path(featureCounts_file_dir, "lane8805_ACTCTCGA_TGGTACAG_Library2_PROTAC_Day_5_Rep_3_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+counts_PROTAC_R4 <- read.delim(file.path(featureCounts_file_dir, "lane8805_CTTGTCGA_GAACATCG_Library5_PROTAC_Day5_Rep4_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+counts_PROTAC_R5 <- read.delim(file.path(featureCounts_file_dir, "lane8805_ACGGAACA_GTTCTCGT_Library8_PROTAC_Day5_Rep5_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+counts_UNC_R3 <- read.delim(file.path(featureCounts_file_dir, "lane8805_TGAGCTAG_AACCGTTC_Library3_UNC_Day5_Rep3_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+counts_UNC_R4 <- read.delim(file.path(featureCounts_file_dir, "lane8805_TTCCAAGG_CCTTGTAG_Library6_UNC_Day5_Rep4_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+counts_UNC_R5 <- read.delim(file.path(featureCounts_file_dir, "lane8805_CGGCTAAT_AGAACGAG_Library9_UNC_Day5_Rep5_L001_GRCh38_hisat2_sorted_Counts.txt"), header=TRUE, comment.char="#", row.names=1)
+
+
+## Rename the 6th column which contains the counts
+colnames(counts_DMSO_R3)[6] <- "Counts_DMSO_R3"
+colnames(counts_DMSO_R4)[6] <- "Counts_DMSO_R4"
+colnames(counts_DMSO_R5)[6] <- "Counts_DMSO_R5"
+colnames(counts_PROTAC_R3)[6] <- "Counts_PROTAC_R3"
+colnames(counts_PROTAC_R4)[6] <- "Counts_PROTAC_R4"
+colnames(counts_PROTAC_R5)[6] <- "Counts_PROTAC_R5"
+colnames(counts_UNC_R3)[6] <- "Counts_UNC_R3"
+colnames(counts_UNC_R4)[6] <- "Counts_UNC_R4"
+colnames(counts_UNC_R5)[6] <- "Counts_UNC_R5"
+
+## Create a GeneID column 
+counts_DMSO_R3$geneID <- rownames(counts_DMSO_R3)
+counts_DMSO_R4$geneID <- rownames(counts_DMSO_R4)
+counts_DMSO_R5$geneID <- rownames(counts_DMSO_R5)
+counts_PROTAC_R3$geneID <- rownames(counts_PROTAC_R3)
+counts_PROTAC_R4$geneID <- rownames(counts_PROTAC_R4)
+counts_PROTAC_R5$geneID <- rownames(counts_PROTAC_R5)
+counts_UNC_R3$geneID <- rownames(counts_UNC_R3)
+counts_UNC_R4$geneID <- rownames(counts_UNC_R4)
+counts_UNC_R5$geneID <- rownames(counts_UNC_R5)
+
+
+## Merge all the counts in one data.frame
+counts_total <- counts_DMSO_R3[, c("geneID", "Counts_DMSO_R3")]
+
+# Merge other data frames one by one
+counts_total <- merge(counts_total, counts_DMSO_R4[, c("geneID", "Counts_DMSO_R4")], by = "geneID", all = TRUE)
+counts_total <- merge(counts_total, counts_DMSO_R5[, c("geneID", "Counts_DMSO_R5")], by = "geneID", all = TRUE)
+counts_total <- merge(counts_total, counts_PROTAC_R3[, c("geneID", "Counts_PROTAC_R3")], by = "geneID", all = TRUE)
+counts_total <- merge(counts_total, counts_PROTAC_R4[, c("geneID", "Counts_PROTAC_R4")], by = "geneID", all = TRUE)
+counts_total <- merge(counts_total, counts_PROTAC_R5[, c("geneID", "Counts_PROTAC_R5")], by = "geneID", all = TRUE)
+counts_total <- merge(counts_total, counts_UNC_R3[, c("geneID", "Counts_UNC_R3")], by = "geneID", all = TRUE)
+counts_total <- merge(counts_total, counts_UNC_R4[, c("geneID", "Counts_UNC_R4")], by = "geneID", all = TRUE)
+counts_total <- merge(counts_total, counts_UNC_R5[, c("geneID", "Counts_UNC_R5")], by = "geneID", all = TRUE)
+
+head(counts_total)
+dim(counts_total) # 78724    10
+
+
+write.table(counts_total, file.path(working_dir, "RNAseq_perturbation_counts_total.txt"), sep = "\t", quote = FALSE, row.names = FALSE)
+
+
+```
+
+
+# DESeq2 analysis
+```{r DESeq2 analysis}
+### The count matrix
+# counts_total contains gene counts with a "geneID" column
+counts_matrix <- counts_total[, -1]  # Remove geneID column to leave only the counts
+rownames(counts_matrix) <- counts_total$geneID  # Use geneID as row names
+colnames(counts_matrix) <- c("DMSO_R3", "DMSO_R4", "DMSO_R5", "PROTAC_R3", "PROTAC_R4", "PROTAC_R5", "UNC_R3", "UNC_R4", "UNC_R5")
+
+head(counts_matrix)
+
+### The metadata
+sample_conditions <- data.frame(
+  condition = c("DMSO", "DMSO", "DMSO", "PROTAC", "PROTAC", "PROTAC", "UNC", "UNC", "UNC"),
+  replicate = c("R3", "R4", "R5", "R3", "R4", "R5", "R3", "R4", "R5"),
+  row.names = colnames(counts_matrix)  # Ensure row names match the column names in the counts matrix
+)
+
+head(sample_conditions, n=10)
+
+
+### Create DESeqDataSet with condition and replicate in the design
+dds <- DESeqDataSetFromMatrix(countData = counts_matrix,
+                              colData = sample_conditions,
+                              design = ~ condition + replicate)  # Include both condition and replicate in the design formula
+
+
+### Running the DESeq2 analysis
+dds <- DESeq(dds)
+
+```
+
+# Extract DESeq2 results for PROTAC versus DMSO
+```{r Extract DESeq2 analysis results: PROTAC versus DMSO}
+# Results for comparison: PROTAC vs DMSO
+res_PROTAC_vs_DMSO <- results(dds, contrast = c("condition", "PROTAC", "DMSO"))
+dim(res_PROTAC_vs_DMSO) # 78724     6
+write.csv(res_PROTAC_vs_DMSO, file.path(working_dir, "RNAseq_PRC2_perturb_DESeq2_results_PROTAC_vs_DMSO_total_vf.csv"))
+
+# Filter significant results (e.g., adjusted p-value < 0.05)
+res_PROTAC_vs_DMSO_sig <- res_PROTAC_vs_DMSO[which(res_PROTAC_vs_DMSO$padj < 0.05), ]
+nrow(res_PROTAC_vs_DMSO[which(res_PROTAC_vs_DMSO$padj > 0.5), ]) #8949
+dim(res_PROTAC_vs_DMSO_sig) # 865     6
+
+## log2FoldChange > 0.1
+# How many UPregulated genes? (log2FoldChange > 0.1 and padj < 0.05)
+upregulated_genes_protac0.1 <- res_PROTAC_vs_DMSO_sig[which(res_PROTAC_vs_DMSO_sig$log2FoldChange > 0.1), ]
+dim(upregulated_genes_protac0.1)  # 684 UPregulated genes
+
+# How many DOWNregulated genes (log2FoldChange < -0.1 and padj < 0.05)
+downregulated_genes_protac0.1 <- res_PROTAC_vs_DMSO_sig[which(res_PROTAC_vs_DMSO_sig$log2FoldChange < -0.1), ]
+dim(downregulated_genes_protac0.1)  # 181 downregulated genes
+
+### Export results
+write.csv(res_PROTAC_vs_DMSO_sig, file.path(working_dir, "RNAseq_PRC2_perturb_DESeq2_results_PROTAC_vs_DMSO_signif_vf.csv"))
+write.csv(upregulated_genes_protac0.1, file.path(working_dir, "upregulated_genes_log2FC0.1_PROTAC_vs_DMSO_vf.csv"))
+write.csv(downregulated_genes_protac0.1, file.path(working_dir, "downregulated_genes_log2FC0.1_PROTAC_vs_DMSO_vf.csv"))
+
+```
+
+
+# Extract DESeq2 results for UNC1999 versus DMSO
+```{r Extract DESeq2 analysis results: UNC versus DMSO}
+
+# Results for comparison: UNC vs DMSO
+res_UNC_vs_DMSO <- results(dds, contrast = c("condition", "UNC", "DMSO"))
+dim(res_UNC_vs_DMSO) # 78724     6
+write.csv(res_UNC_vs_DMSO, file.path(working_dir, "RNAseq_PRC2_perturb_DESeq2_results_UNC1999_vs_DMSO_total_vf.csv"))
+
+# Filter significant results (e.g., adjusted p-value < 0.05)
+res_UNC_vs_DMSO_sig <- res_UNC_vs_DMSO[which(res_UNC_vs_DMSO$padj < 0.05), ]
+nrow(res_UNC_vs_DMSO[which(res_UNC_vs_DMSO$padj > 0.5), ]) #8178
+dim(res_UNC_vs_DMSO_sig) # 2859     6
+
+## log2FoldChange > 0.1
+# How many UPregulated genes? (log2FoldChange > 0.1 and padj < 0.05)
+upregulated_genes_unc0.1 <- res_UNC_vs_DMSO_sig[which(res_UNC_vs_DMSO_sig$log2FoldChange > 0.1), ]
+dim(upregulated_genes_unc0.1)  # 1783 UPregulated genes
+
+# How many DOWNregulated genes (log2FoldChange < -0.1 and padj < 0.05)
+downregulated_genes_unc0.1 <- res_UNC_vs_DMSO_sig[which(res_UNC_vs_DMSO_sig$log2FoldChange < -0.1), ]
+dim(downregulated_genes_unc0.1)  # 1076 downregulated genes
+
+### Export results
+write.csv(res_UNC_vs_DMSO_sig, file.path(working_dir, "RNAseq_PRC2_perturb_DESeq2_results_UNC_vs_DMSO_signif_vf.csv"))
+write.csv(upregulated_genes_unc0.1, file.path(working_dir, "upregulated_genes_log2FC0.1_UNC_vs_DMSO_vf.csv"))
+write.csv(downregulated_genes_unc0.1, file.path(working_dir, "downregulated_genes_log2FC0.1_UNC_vs_DMSO_vf.csv"))
+
+```
+
+
+# Visualisation: Number of significantly differentially expressed genes (|log₂FC| ≥ 0.1, adjusted p-value < 0.05) measured by RNA-seq after PRC2 PROTAC or PRC2 catalytic inhibitor treatment relative to DMSO control. 
+
+Light grey bars: significantly downregulated genes; dark grey bars: significantly upregulated genes.
+```{r Generate a barplot}
+
+## Summarise DEG counts in a data frame
+# PROTAC perturbation
+deg_counts_PROTAC <- data.frame(
+  Threshold = c("log2FC > 0.1", "log2FC > 0.1"),
+  Regulation = c("Up", "Down"),
+  Count = c(
+    nrow(upregulated_genes_protac0.1),
+    nrow(downregulated_genes_protac0.1)
+  )
+)
+
+deg_counts_PROTAC$Condition <- "PRC2 PROTAC"
+
+# Catalytic inhibitor perturbation (UNC1999)
+deg_counts_UNC <- data.frame(
+  Threshold = c("log2FC > 0.1", "log2FC > 0.1"),
+  Regulation = c("Up", "Down"),
+  Count = c(
+    nrow(upregulated_genes_unc0.1),
+    nrow(downregulated_genes_unc0.1)
+  )
+)
+
+deg_counts_UNC$Condition <- "PRC2 inhibitor"
+
+## Combine
+deg_counts_all <- rbind(deg_counts_PROTAC, deg_counts_UNC)
+deg_counts_all$Condition <- factor(
+  deg_counts_all$Condition,
+  levels = c("PRC2 PROTAC", "PRC2 inhibitor")
+)
+
+## Barplot
+pdf(file.path(working_dir, "SuppFigureS3D.pdf"), width = 5, height = 5)
+ggplot(deg_counts_all, aes(x = Condition, y = Count, fill = Regulation)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("Up" = "darkgrey", "Down" = "lightgrey")) +
+  theme_minimal() +
+  labs(
+    title = "DEG counts at log2FC > 0.1 threshold",
+    x = "Condition",
+    y = "Number of Significant Genes",
+    fill = "Regulation"
+  )
+dev.off()
+
+
+```
+
+
+# Volcano plots of differential gene expression after PRC2 PROTAC or PRC2 catalytic inhibitor treatment, compared to DMSO. 
+Blue dots indicate significantly downregulated genes (padj < 0.05 & log₂FC ≤ -0.1); orange dots indicate significantly upregulated genes (padj < 0.05 & log₂FC ≥ 0.1); the rest of the genes are shown as grey dots. Dashed grey lines indicate significance and fold-change thresholds. Labels are shown for genes with padj < 1e−3 and |log₂FC| > 0.41, corresponding to a ~30% change in expression.
+
+```{r Volcano plot}
+
+## Prepare Ensembl IDs
+ensembl_ids_PROTAC <- rownames(res_PROTAC_vs_DMSO)
+ensembl_ids_UNC <- rownames(res_UNC_vs_DMSO)
+
+# Remove version suffixes if present (e.g., ENSG00000141510.15 -> ENSG00000141510)
+ensembl_ids_clean_PROTAC <- sub("\\..*", "", ensembl_ids_PROTAC)
+ensembl_ids_clean_UNC <- sub("\\..*", "", ensembl_ids_UNC)
+
+## Map Ensembl IDs to HGNC gene symbols
+gene_symbols_PROTAC <- mapIds(
+    org.Hs.eg.db,
+    keys = ensembl_ids_clean_PROTAC,
+    column = "SYMBOL",
+    keytype = "ENSEMBL",
+    multiVals = function(x) x[1]  # pick first if multiple mappings
+)
+
+gene_symbols_UNC <- mapIds(
+    org.Hs.eg.db,
+    keys = ensembl_ids_clean_UNC,
+    column = "SYMBOL",
+    keytype = "ENSEMBL",
+    multiVals = function(x) x[1]  # pick first if multiple mappings
+)
+
+## Add gene symbol column
+res_with_symbols_PROTAC <- as.data.frame(res_PROTAC_vs_DMSO)
+res_with_symbols_PROTAC$symbol <- gene_symbols_PROTAC[ensembl_ids_clean_PROTAC]
+
+res_with_symbols_UNC <- as.data.frame(res_UNC_vs_DMSO)
+res_with_symbols_UNC$symbol <- gene_symbols_UNC[ensembl_ids_clean_UNC]
+
+
+# 3. Add category column for coloring points
+res_with_symbols_PROTAC$category <- ifelse(
+  res_with_symbols_PROTAC$padj < 0.05 & res_with_symbols_PROTAC$log2FoldChange >= 0.1, "Upregulated",
+  ifelse(res_with_symbols_PROTAC$padj < 0.05 & res_with_symbols_PROTAC$log2FoldChange <= -0.1, "Downregulated", "Not significant")
+)
+
+res_with_symbols_UNC$category <- ifelse(
+  res_with_symbols_UNC$padj < 0.05 & res_with_symbols_UNC$log2FoldChange >= 0.1, "Upregulated",
+  ifelse(res_with_symbols_UNC$padj < 0.05 & res_with_symbols_UNC$log2FoldChange <= -0.1, "Downregulated", "Not significant")
+)
+
+
+## Optional: remove labels that are just Ensembl IDs
+res_with_symbols_PROTAC$label <- ifelse(
+  is.na(res_with_symbols_PROTAC$symbol), 
+  NA, 
+  res_with_symbols_PROTAC$symbol
+)
+
+res_with_symbols_UNC$label <- ifelse(
+  is.na(res_with_symbols_UNC$symbol), 
+  NA, 
+  res_with_symbols_UNC$symbol
+)
+
+## Filter out NA padj values once, so they don't show as vertical lines at 0 on -log10(padj)
+res_with_symbols_PROTAC <- subset(res_with_symbols_PROTAC, !is.na(padj))
+res_with_symbols_UNC <- subset(res_with_symbols_UNC, !is.na(padj))
+
+## Define the data frame of genes to label (significant hits with large effect size)
+label_data_PROTAC <- subset(
+  res_with_symbols_PROTAC,
+  padj < 1e-3 & abs(log2FoldChange) > 0.41 & !is.na(label)
+)
+
+label_data_UNC <- subset(
+  res_with_symbols_UNC,
+  padj < 1e-3 & abs(log2FoldChange) > 0.41 & !is.na(label)
+)
+
+### Plot volcano with gene symbols as text labels for significant genes
+
+## PROTAC
+pdf(file.path(working_dir, "Volcanoplot_PROTACvsDMSO_vf.pdf"), width = 7, height = 7)
+ggplot(res_with_symbols_PROTAC, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(aes(color = category), size = 1.2, alpha = 0.6) +
+  
+# Custom colors
+  scale_color_manual(values = c("Upregulated" = "#D55E00", "Downregulated" = "#0072B2", "Not significant" = "grey70")) +
+  
+# Add vertical and horizontal thresholds for padj and FC cutoffs:
+  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", color = "black", size = 0.3) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "black", size = 0.3) +
+  
+# Labels for selected significant genes
+  geom_text(
+    data = label_data_PROTAC,
+    aes(label = label),
+    size = 3,
+    vjust = -0.5,
+    check_overlap = TRUE
+  ) +
+  
+# Axis limits and breaks
+  scale_x_continuous(limits = c(-2, 2)) +
+  scale_y_continuous(limits = c(0, 20), breaks = seq(0, 20, by = 4)) +
+
+# Clean theme
+  theme_minimal(base_size = 10) +
+  theme(
+    legend.position = "bottom",
+    panel.grid.major = element_line(size = 0.2, color = "grey90"),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(size = 0.3, color = "black"),
+    axis.ticks = element_line(size = 0.3, color = "black")
+  ) +
+  
+  labs(
+    title = "PROTAC vs DMSO: Differential Expression",
+    x = expression(log[2]*" Fold Change"),
+    y = expression(-log[10]*" Adjusted P-value"),
+    color = "Categories"
+  )
+dev.off()
+
+
+## UNC1999
+pdf(file.path(working_dir, "Volcanoplot_UNC1999vsDMSO_vf.pdf"), width = 7, height = 7)
+ggplot(res_with_symbols_UNC, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(aes(color = category), size = 1.2, alpha = 0.6) +
+  
+# Custom colors
+  scale_color_manual(values = c("Upregulated" = "#D55E00", "Downregulated" = "#0072B2", "Not significant" = "grey70")) +
+  
+# Add vertical and horizontal thresholds for padj and FC cutoffs:
+  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", color = "black", size = 0.3) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "black", size = 0.3) +
+  
+# Labels for selected significant genes
+  geom_text(
+    data = label_data_UNC,
+    aes(label = label),
+    size = 3,
+    vjust = -0.5,
+    check_overlap = TRUE
+  ) +
+  
+# Axis limits and breaks
+  scale_x_continuous(limits = c(-2, 2)) +
+  scale_y_continuous(limits = c(0, 20), breaks = seq(0, 20, by = 4)) +
+
+# Clean theme
+  theme_minimal(base_size = 10) +
+  theme(
+    legend.position = "bottom",
+    panel.grid.major = element_line(size = 0.2, color = "grey90"),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(size = 0.3, color = "black"),
+    axis.ticks = element_line(size = 0.3, color = "black")
+  ) +
+  
+  labs(
+    title = "Catalytic inhibitor vs DMSO: Differential Expression",
+    x = expression(log[2]*" Fold Change"),
+    y = expression(-log[10]*" Adjusted P-value"),
+    color = "Categories"
+  )
+
+dev.off()
+
+```
+
