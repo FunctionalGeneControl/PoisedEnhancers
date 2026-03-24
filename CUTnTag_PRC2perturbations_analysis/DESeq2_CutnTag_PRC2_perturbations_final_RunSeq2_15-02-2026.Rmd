@@ -1,0 +1,181 @@
+---
+title: "DESeq2 analysis of CUT&Tag data after PRC2_perturbations at day 5 of the transition SeqRun2"
+author: "Marina Nocente"
+date: "2025-02-11"
+output: html_document
+---
+
+# Libraries
+```{r}
+library(data.table)
+library(DESeq2)
+
+```
+
+# File paths
+```{r}
+base_dir <- "~/Documents/Bioinformatics/CnT_PRC2_perturb_Day5"
+CUTnTag_pileup_dir <- file.path(base_dir, "Run2_CUTnTagPrc2_June2025/PileUp_from_bigwig")
+working_dir <- "~/Documents/Project_writing/Paper_PEs/Data_release/CUT&Tag_PRC2/final/"
+
+```
+
+
+# Upload and prepare H3K27me3 CUT&Tag data after PRC2 perturbations
+```{r}
+## Import PileUp from bigwig files for the Cut&Tag data (Run2 sequencing)
+DMSO_Rep1_H3K27me3_pileup <- fread(file.path(CUTnTag_pileup_dir, "lane8849_TAAGGCGA_TAGATCGC_DMSO_Rep1_H3K27me3_L001.pileup"))
+DMSO_Rep2_H3K27me3_pileup <- fread(file.path(CUTnTag_pileup_dir, "lane8849_GCTACGCT_AGAGTAGA_DMSO_Rep2_H3K27me3_L001.pileup"))
+
+PROTAC_Rep1_H3K27me3_pileup <- fread(file.path(base_dir, "PileUp_from_bigwig/PROTAC_Rep1_H3K27me3.pileup")) # From sequencing Run1
+PROTAC_Rep2_H3K27me3_pileup <- fread(file.path(CUTnTag_pileup_dir, "lane8849_TGCTGGGT_GTAAGGAG_PROTAC_Rep2_H3K27me3_L001.pileup"))
+
+UNC_Rep1_H3K27me3_pileup <- fread(file.path(CUTnTag_pileup_dir, "lane8849_GCTACGCT_TATCCTCT_UNC_Rep1_H3K27me3_L001.pileup"))
+UNC_Rep2_H3K27me3_pileup <- fread(file.path(CUTnTag_pileup_dir, "lane8849_TGCTGGGT_ACTGCATA_UNC_Rep2_H3K27me3_L001.pileup"))
+
+
+# Select the columns of interest (chr, start, end, sum)
+DMSO_Rep1_27me3 <- DMSO_Rep1_H3K27me3_pileup[,c(1,2,3,10)]
+DMSO_Rep2_27me3 <- DMSO_Rep2_H3K27me3_pileup[,c(1,2,3,10)]
+
+PROTAC_Rep1_27me3 <- PROTAC_Rep1_H3K27me3_pileup[,c(1,2,3,10)]
+PROTAC_Rep2_27me3 <- PROTAC_Rep2_H3K27me3_pileup[,c(1,2,3,10)]
+
+UNC_Rep1_27me3 <- UNC_Rep1_H3K27me3_pileup[,c(1,2,3,10)]
+UNC_Rep2_27me3<- UNC_Rep2_H3K27me3_pileup[,c(1,2,3,10)]
+
+setnames(DMSO_Rep1_27me3, "sum", "DMSO_Rep1_27me3")
+setnames(DMSO_Rep2_27me3, "sum", "DMSO_Rep2_27me3")
+setnames(PROTAC_Rep1_27me3, "sum", "PROTAC_Rep1_27me3")
+setnames(PROTAC_Rep2_27me3, "sum", "PROTAC_Rep2_27me3")
+setnames(UNC_Rep1_27me3,"sum","UNC_Rep1_27me3")
+setnames(UNC_Rep2_27me3,"sum","UNC_Rep2_27me3")
+
+# merge in a unique data.frame
+K27me3_PRC2_merged <- Reduce(function(x, y) merge(x, y, by = c("#chrom", "start", "end"), all = TRUE), 
+                             list(DMSO_Rep1_27me3, DMSO_Rep2_27me3, PROTAC_Rep1_27me3, PROTAC_Rep2_27me3, UNC_Rep1_27me3, UNC_Rep2_27me3))
+dim(K27me3_PRC2_merged) # 32142      9
+setnames(K27me3_PRC2_merged,1, "chr")
+
+
+# Number of total counts per condition
+apply(K27me3_PRC2_merged[, 4:9], 2, sum)
+# DMSO_Rep1_27me3   DMSO_Rep2_27me3    PROTAC_Rep1_27me3   PROTAC_Rep2_27me3    UNC_Rep1_27me3    UNC_Rep2_27me3 
+#     579,199,293       361,889,717           77,503,087         124,525,265        95,457,978        71,231,225
+
+
+## Look at the correlations
+# Between DMSO "duplicates"
+with(K27me3_PRC2_merged, cor(DMSO_Rep1_27me3, DMSO_Rep2_27me3)) # 0.9864158
+# Between PROTAC duplicates
+with(K27me3_PRC2_merged, cor(PROTAC_Rep1_27me3, PROTAC_Rep2_27me3)) # 0.949081
+# Between UNC1999 duplicates
+with(K27me3_PRC2_merged, cor(UNC_Rep1_27me3, UNC_Rep2_27me3)) # 0.9657294
+# Between Day5 ctrl and PROTAC rep1
+with(K27me3_PRC2_merged, cor(DMSO_Rep2_27me3, PROTAC_Rep1_27me3)) # 0.8988013
+with(K27me3_PRC2_merged, cor(DMSO_Rep2_27me3, PROTAC_Rep2_27me3)) # 0.9272717
+
+# Between all
+cor(as.matrix(K27me3_PRC2_merged[, 4:ncol(K27me3_PRC2_merged)]))
+
+fwrite(K27me3_PRC2_merged, file.path(working_dir, "H3K27me3_CutNtag_PRC2perturb_RunSeq2.txt"), sep = "\t", quote = FALSE)
+
+```
+
+
+# Create the DESeq2 dataset: the count matrix and the metadata and run DESeq2
+DESeq2 needs two main inputs:
+- A count matrix: This matrix should have rows as features (bait IDs) and columns as samples (DMSO, PROTAC, UNC1999, etc.).
+- A sample information table (metadata): This table contains information about the experimental conditions or the groups each sample belongs to.
+
+## The count matrix
+```{r  }
+## Convert the selected counts data to a matrix
+K27me3_PRC2_merged_final_matrix <- as.matrix(K27me3_PRC2_merged[, -c(1:3)])
+rownames(K27me3_PRC2_merged_final_matrix) = paste(K27me3_PRC2_merged$chr,K27me3_PRC2_merged$start, K27me3_PRC2_merged$end, sep="_" )
+
+head(K27me3_PRC2_merged_final_matrix)
+
+
+## Round the number in the matrix for DESeq2
+K27me3_PRC2_merged_final_matrix_rounded = apply(K27me3_PRC2_merged_final_matrix, 2, round)
+
+```
+
+## The sample metadata
+```{r}
+colData <- data.frame(
+  sample = colnames(K27me3_PRC2_merged_final_matrix),
+  condition = factor(c("DMSO", "DMSO", "PROTAC", "PROTAC", "UNC1999", "UNC1999")),
+  perturb = factor(c("No", "No", "Yes", "Yes", "Yes", "Yes")),
+  row.names =  colnames(K27me3_PRC2_merged_final_matrix)
+)
+
+head(colData, n=6)
+
+```
+
+# Proceed to DESeq2 analysis
+```{r}
+## Create DESeq2 dataset
+dds <- DESeqDataSetFromMatrix(countData = K27me3_PRC2_merged_final_matrix_rounded, 
+                              colData = colData, 
+                              design = ~ condition)
+
+
+## The data are already normalized, so we don't allow another normalization
+sizeFactors(dds)<-rep(1, nrow(colData))
+
+## Run DESeq2
+dds <- DESeq(dds)
+summary(dds)
+
+
+# Extract normalized counts
+# I prevented DESeq2 from re-normalising (calibrated CUT&Tag), so counts(dds, normalized=TRUE) will return the input counts
+norm_counts <- counts(dds, normalized = TRUE)
+dmso_samples <- which(colData(dds)$condition == "DMSO")
+dmso_mean <- rowMeans(norm_counts[, dmso_samples])
+
+dmso_mean_df <- data.frame(
+  region = rownames(norm_counts),
+  DMSO_mean = dmso_mean
+)
+
+fwrite(dmso_mean_df, file.path(working_dir, "DMSO_mean_deseq2_counts.txt"), sep = "\t")
+
+```
+
+
+# Extract the results: PROTAC versus DMSO
+```{r Results for PROTAC versus DMSO CUT&Tag data}
+## Get results for PROTAC vs DMSO for CUT&Tag data
+res_PROTAC_vs_DMSO_CnT <- results(dds, contrast = c("condition", "PROTAC", "DMSO"))
+saveRDS(res_PROTAC_vs_DMSO_CnT, file.path(working_dir, "res_PROTAC_vs_DMSO_CnT.rds"))
+
+res_PROTAC_vs_DMSO_CnT <- as.data.table(as.data.frame(res_PROTAC_vs_DMSO_CnT), keep.rownames = "region")
+
+res_PROTAC_vs_DMSO_CnT_dmsoMean <- merge(res_PROTAC_vs_DMSO_CnT, dmso_mean_df, by = "region", all.x = TRUE)
+res_PROTAC_vs_DMSO_CnT_dmsoMean[, DMSO_mean_bin := cut(log(DMSO_mean, 10), breaks=c(0,2,3,4,5,6))]
+
+fwrite(as.data.table(res_PROTAC_vs_DMSO_CnT_dmsoMean), file.path(working_dir, "CUTnTag_deseq2_res_PROTAC_DMSO_dmsoMean_RunSeq2.txt"), sep = "\t")
+
+```
+
+
+
+# Extract the results: UNC1999 versus DMSO
+
+```{r Results for UNC1999 versus DMSO CUT&Tag after UNC perturbation}
+## Get results for UNC1999 vs DMSO
+res_UNC1999_vs_DMSO_CnT <- results(dds, contrast = c("condition", "UNC1999", "DMSO"))
+saveRDS(res_UNC1999_vs_DMSO_CnT, file.path(working_dir, "res_UNC1999_vs_DMSO_CnT.rds"))
+
+res_UNC1999_vs_DMSO_CnT <- as.data.table(as.data.frame(res_UNC1999_vs_DMSO_CnT), keep.rownames = "region")
+
+res_UNC1999_vs_DMSO_CnT_dmsoMean <- merge(res_UNC1999_vs_DMSO_CnT, dmso_mean_df, by = "region", all.x = TRUE)
+res_UNC1999_vs_DMSO_CnT_dmsoMean[, DMSO_mean_bin := cut(log(DMSO_mean, 10), breaks=c(0,2,3,4,5,6))]
+
+fwrite(as.data.table(res_UNC1999_vs_DMSO_CnT_dmsoMean), file.path(working_dir, "CUTnTag_deseq2_res_UNC1999_DMSO_dmsoMean_RunSeq2.txt"), sep = "\t")
+
+```
