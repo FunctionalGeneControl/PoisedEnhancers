@@ -94,7 +94,7 @@ pm <- pm %>%
   )
 head(pm)
 dim(pm)
-fwrite(pm, file.path(base_dir, "Peakmatrix_focused_transition_NE_DE_TemporalClusters.tx"), sep = "\t", quote=F, col.names=T)
+fwrite(pm, file.path(base_dir, "Peakmatrix_focused_transition_NE_DE_TemporalClusters.txt"), sep = "\t", quote=F, col.names=T)
 
 
 ### DESeq2 analysis for CUT&Tag data with different histone marks across the differentiation
