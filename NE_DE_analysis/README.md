@@ -8,6 +8,4 @@ To reproduce these figures, run the script "Figure6_NE_DE_analysis_final_script_
 - baitmap_file (Human_PEcHiC_hg38_DpnII_bin5K_sol_baits.baitmap_4col.txt), available on OSF.
 
 This script generates the following output files:
-- "Peakmatrix_focused_transition_NE_DE_TemporalClusters.txt" used to generate Table S1
 - "Supplementary_Table_H3K27me3.tsv", "Supplementary_Table_H3K27ac.tsv", and "Supplementary_Table_H3K4me1.tsv", which integrate PECHi-C stats, temporal classes and CUT&Tag DESEq2 results (DE vs Day14 or NE vs Day14), and are used to generate Table S4.
-
